@@ -107,3 +107,20 @@ The smoke test checks required files, duplicate IDs, JavaScript-to-HTML referenc
 ## Licence
 
 MIT.
+
+
+## Version 3: design-package workbench
+
+The tool now prepares a complete build-ready design package before the website is handed to a coding agent.
+
+- Assign desktop, tablet and mobile references with practical width guidance.
+- Link equivalent regions across breakpoints and record scale, stack, wrap, hide, replace and reorder behaviour.
+- Extract provisional PDF text, font family candidates and font sizes for confirmation.
+- Lock Google Fonts, Adobe Fonts, licensed local webfont references or system fonts into the exported CSS and prompt.
+- Analyse measured regions for alignments, spacing, margins, repeated component groups and possible page sections.
+- Record asset instructions, filenames, formats, crops, semantic roles, heading levels, alt text, reading order and keyboard behaviour.
+- Plan routes, CMS/editing, content ownership, interactions, data, browser support, performance, SEO, privacy and deployment.
+- Calculate visual comparison scores for desktop, tablet and mobile references.
+- Run a preflight audit that blocks export only when essential information is missing.
+
+The exported package now includes responsive, typography, asset, accessibility, delivery and audit documents in addition to the original measured specification.
