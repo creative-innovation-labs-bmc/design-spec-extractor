@@ -3,12 +3,343 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow, noarchive">
-  <title>design-spec-extractor</title>
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#373A36">
+  <title>Design Spec Extractor</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main><h1>design-spec-extractor</h1><p>A browser-based toolkit for measuring Illustrator and PDF website references and exporting an explicit implementation specification for coding agents.</p><p>Starter created. The full implementation is next.</p></main>
-  <script src="app.js"></script>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">D</div>
+      <div>
+        <h1>Design Spec Extractor</h1>
+        <p>Turn visual references into a measurable design-to-code handoff.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="newProjectBtn" class="button button-quiet" type="button">New</button>
+      <label class="button button-quiet file-button">
+        Open package
+        <input id="openPackageInput" type="file" accept=".zip,application/zip" hidden>
+      </label>
+      <button id="exportBtn" class="button button-primary" type="button" disabled>Export handoff package</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="panel panel-left" aria-label="Project controls">
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Project</h2>
+          <span id="saveStatus" class="status-pill">Local only</span>
+        </div>
+        <label class="field">
+          <span>Project name</span>
+          <input id="projectName" type="text" value="Website design" autocomplete="off">
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Target width</span>
+            <input id="targetWidth" type="number" min="320" max="10000" value="1440">
+          </label>
+          <label class="field">
+            <span>Target height</span>
+            <input id="targetHeight" type="number" min="320" max="30000" value="1200">
+          </label>
+        </div>
+        <label class="field">
+          <span>Implementation target</span>
+          <select id="frameworkSelect">
+            <option value="html-css-js">HTML, CSS and JavaScript</option>
+            <option value="react-vite">React with Vite</option>
+            <option value="nextjs">Next.js</option>
+            <option value="astro">Astro</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>References</h2>
+          <span id="documentCount" class="count-badge">0</span>
+        </div>
+        <label class="drop-zone" id="dropZone">
+          <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" multiple hidden>
+          <strong>Drop artwork here</strong>
+          <span>PNG, JPG, WebP or PDF</span>
+        </label>
+        <div id="documentList" class="document-list" aria-live="polite"></div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Inspection tools</h2>
+        </div>
+        <div class="tool-grid" role="toolbar" aria-label="Canvas tools">
+          <button class="tool-button is-active" data-tool="select" type="button" title="Select region (V)">
+            <span class="tool-icon">↖</span><span>Select</span>
+          </button>
+          <button class="tool-button" data-tool="region" type="button" title="Draw region (R)">
+            <span class="tool-icon">▭</span><span>Region</span>
+          </button>
+          <button class="tool-button" data-tool="colour" type="button" title="Sample colour (C)">
+            <span class="tool-icon">◉</span><span>Colour</span>
+          </button>
+          <button class="tool-button" data-tool="guide-x" type="button" title="Add vertical guide (X)">
+            <span class="tool-icon">↕</span><span>Guide X</span>
+          </button>
+          <button class="tool-button" data-tool="guide-y" type="button" title="Add horizontal guide (Y)">
+            <span class="tool-icon">↔</span><span>Guide Y</span>
+          </button>
+          <button id="autoPaletteBtn" class="tool-button" type="button" title="Extract dominant colours">
+            <span class="tool-icon">✦</span><span>Palette</span>
+          </button>
+        </div>
+        <p class="helper-text">Draw boxes around components, text blocks, images and major layout regions. Coordinates remain tied to the source image pixels.</p>
+      </section>
+    </aside>
+
+    <section class="workspace" aria-label="Design reference workspace">
+      <div class="workspace-toolbar">
+        <div class="toolbar-group">
+          <button id="zoomOutBtn" class="icon-button" type="button" title="Zoom out">−</button>
+          <button id="zoomLabel" class="zoom-label" type="button" title="Reset to 100%">100%</button>
+          <button id="zoomInBtn" class="icon-button" type="button" title="Zoom in">+</button>
+          <button id="fitBtn" class="button button-small button-quiet" type="button">Fit</button>
+        </div>
+        <div class="toolbar-group comparison-controls">
+          <label class="button button-small button-quiet file-button">
+            Compare screenshot
+            <input id="compareInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+          </label>
+          <label id="compareOpacityWrap" class="opacity-control" hidden>
+            <span>Blend</span>
+            <input id="compareOpacity" type="range" min="0" max="100" value="50">
+          </label>
+          <label id="differenceToggleWrap" class="toggle" hidden>
+            <input id="differenceToggle" type="checkbox">
+            <span>Difference</span>
+          </label>
+          <button id="clearCompareBtn" class="text-button" type="button" hidden>Clear</button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <label class="toggle">
+            <input id="gridToggle" type="checkbox">
+            <span>Grid</span>
+          </label>
+          <label class="toggle">
+            <input id="labelsToggle" type="checkbox" checked>
+            <span>Labels</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="workspaceViewport" class="workspace-viewport">
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">▦</div>
+          <h2>Add a website reference</h2>
+          <p>Export your Illustrator design as a high-resolution PNG or use the PDF directly. Nothing leaves this browser.</p>
+          <label class="button button-primary file-button">
+            Choose files
+            <input id="emptyReferenceInput" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" multiple hidden>
+          </label>
+        </div>
+        <div id="canvasStage" class="canvas-stage" hidden>
+          <canvas id="baseCanvas"></canvas>
+          <canvas id="compareCanvas"></canvas>
+          <canvas id="overlayCanvas" tabindex="0" aria-label="Interactive annotation canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="workspace-status">
+        <span id="activeDocumentLabel">No reference selected</span>
+        <span id="cursorStatus">X 0 · Y 0</span>
+      </div>
+    </section>
+
+    <aside class="panel panel-right" aria-label="Specification controls">
+      <div class="tabs" role="tablist">
+        <button class="tab is-active" data-tab="inspect" type="button" role="tab">Inspect</button>
+        <button class="tab" data-tab="tokens" type="button" role="tab">Tokens</button>
+        <button class="tab" data-tab="handoff" type="button" role="tab">Handoff</button>
+      </div>
+
+      <div class="tab-panel is-active" data-tab-panel="inspect">
+        <section id="selectionEmpty" class="panel-section selection-empty">
+          <h2>No region selected</h2>
+          <p>Use the Region tool to mark components. Select a box to edit its precise coordinates and meaning.</p>
+        </section>
+
+        <section id="selectionEditor" class="panel-section" hidden>
+          <div class="section-heading">
+            <h2>Selected region</h2>
+            <button id="deleteRegionBtn" class="text-button danger" type="button">Delete</button>
+          </div>
+          <label class="field">
+            <span>Name</span>
+            <input id="regionName" type="text" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Type</span>
+            <select id="regionType">
+              <option value="layout">Layout region</option>
+              <option value="navigation">Navigation</option>
+              <option value="hero">Hero</option>
+              <option value="section">Section</option>
+              <option value="text">Text block</option>
+              <option value="image">Image or media</option>
+              <option value="card">Card</option>
+              <option value="button">Button</option>
+              <option value="form">Form</option>
+              <option value="footer">Footer</option>
+              <option value="decoration">Decorative element</option>
+            </select>
+          </label>
+          <div class="coordinate-grid">
+            <label class="field"><span>Source X</span><input id="regionX" type="number"></label>
+            <label class="field"><span>Source Y</span><input id="regionY" type="number"></label>
+            <label class="field"><span>Source width</span><input id="regionW" type="number" min="1"></label>
+            <label class="field"><span>Source height</span><input id="regionH" type="number" min="1"></label>
+          </div>
+          <p id="regionCssReadout" class="measurement-readout"></p>
+          <label class="field">
+            <span>Implementation notes</span>
+            <textarea id="regionNotes" rows="5" placeholder="Example: Image is full bleed. Heading baseline aligns with the card grid."></textarea>
+          </label>
+          <label class="field checkbox-field">
+            <input id="regionRepeat" type="checkbox">
+            <span>Repeated component</span>
+          </label>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Page scale and notes</h2>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Implementation width (CSS px)</span>
+              <input id="pageCssWidth" type="number" min="320" max="10000" value="1440">
+            </label>
+            <label class="field">
+              <span>Calculated page height</span>
+              <input id="pageCssHeight" type="number" readonly>
+            </label>
+          </div>
+          <p id="pageScaleLabel" class="measurement-readout"></p>
+          <label class="field">
+            <span>Purpose and behaviour</span>
+            <textarea id="pageNotes" rows="7" placeholder="Describe interactions, sticky elements, carousels, animation, or anything the static reference cannot show."></textarea>
+          </label>
+        </section>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="tokens">
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Colour palette</h2>
+            <button id="clearPaletteBtn" class="text-button" type="button">Clear</button>
+          </div>
+          <div id="paletteList" class="palette-list"></div>
+          <div class="inline-form">
+            <input id="manualColour" type="text" placeholder="#373A36" maxlength="9">
+            <button id="addColourBtn" class="button button-small button-quiet" type="button">Add</button>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Spacing scale</h2>
+          </div>
+          <div id="spacingList" class="token-chips"></div>
+          <div class="inline-form">
+            <input id="spacingValue" type="number" min="1" placeholder="24">
+            <button id="addSpacingBtn" class="button button-small button-quiet" type="button">Add px</button>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Typography</h2>
+            <button id="addTypeStyleBtn" class="text-button" type="button">Add style</button>
+          </div>
+          <div id="typeStyleList" class="type-style-list"></div>
+        </section>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="handoff">
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Content brief</h2>
+          </div>
+          <label class="field">
+            <span>What the website needs to achieve</span>
+            <textarea id="projectBrief" rows="7" placeholder="Audience, purpose, conversion goal and key messages."></textarea>
+          </label>
+          <label class="field">
+            <span>What the AI should fill in</span>
+            <textarea id="missingContent" rows="7" placeholder="List missing sections, incomplete copy, unknown image choices or content that needs to be inferred."></textarea>
+          </label>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Hard rules</h2>
+          </div>
+          <label class="field">
+            <span>Non-negotiable design constraints</span>
+            <textarea id="hardRules" rows="8">Do not redesign or modernise the supplied artwork.
+Match spacing, scale, alignment, crop and typography before adding enhancements.
+Use the reference image and measured specification as the source of truth.
+Do not invent gradients, rounded cards, shadows or decorative UI patterns that are absent from the reference.
+Build the desktop reference first, then derive responsive behaviour.</textarea>
+          </label>
+          <label class="field">
+            <span>Responsive approach</span>
+            <textarea id="responsiveNotes" rows="6" placeholder="Example: At tablet width, collapse the 3-column grid to 2. On mobile, preserve image order and reduce outer gutters to 20 px."></textarea>
+          </label>
+        </section>
+
+        <section class="panel-section export-preview-section">
+          <div class="section-heading">
+            <h2>Generated prompt</h2>
+            <button id="copyPromptBtn" class="text-button" type="button">Copy</button>
+          </div>
+          <pre id="promptPreview" class="prompt-preview">Add a reference to generate the handoff prompt.</pre>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="typeStyleDialog" class="modal">
+    <form method="dialog" id="typeStyleForm">
+      <div class="modal-header">
+        <h2>Add typography style</h2>
+        <button class="icon-button" value="cancel" aria-label="Close" type="submit">×</button>
+      </div>
+      <div class="modal-body">
+        <label class="field"><span>Token name</span><input id="typeName" required placeholder="Display heading"></label>
+        <label class="field"><span>Font family</span><input id="typeFamily" required placeholder="Onest, Arial, sans-serif"></label>
+        <div class="field-row">
+          <label class="field"><span>Size (px)</span><input id="typeSize" type="number" min="1" required value="48"></label>
+          <label class="field"><span>Weight</span><input id="typeWeight" type="number" min="100" max="900" step="100" value="700"></label>
+        </div>
+        <div class="field-row">
+          <label class="field"><span>Line height</span><input id="typeLineHeight" type="number" min="0.5" max="3" step="0.05" value="1.1"></label>
+          <label class="field"><span>Letter spacing (px)</span><input id="typeLetterSpacing" type="number" step="0.1" value="0"></label>
+        </div>
+        <label class="field"><span>Colour</span><input id="typeColour" type="text" value="#1C1B1C"></label>
+      </div>
+      <div class="modal-actions">
+        <button class="button button-quiet" value="cancel" type="submit">Cancel</button>
+        <button id="saveTypeStyleBtn" class="button button-primary" value="default" type="submit">Add style</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
