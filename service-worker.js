@@ -1,9 +1,12 @@
-const CACHE_NAME = "design-spec-extractor-v1";
+const CACHE_NAME = "design-spec-extractor-v3";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./styles-v3.css",
   "./js/app.js",
+  "./js/spec-workbench.js",
+  "./js/quick-scale.js",
   "./assets/icon.svg",
   "./manifest.webmanifest"
 ];
