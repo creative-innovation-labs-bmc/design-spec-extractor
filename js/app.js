@@ -258,6 +258,20 @@ async function addDocumentFromBlob(blob, options = {}) {
     notes: restored.notes ?? "",
     cssWidth: Number(restored.cssWidth) || Number(options.cssWidth) || state.project.targetWidth,
     compare: null,
+    viewport: structuredClone(restored.viewport ?? options.viewport ?? {
+      kind: "unassigned",
+      label: "",
+      presetId: "",
+      minWidth: null,
+      maxWidth: null,
+      orientation: "auto",
+      notes: "",
+    }),
+    pdfTextRuns: Array.isArray(restored.pdfTextRuns) ? restored.pdfTextRuns : (Array.isArray(options.pdfTextRuns) ? options.pdfTextRuns : []),
+    detectedTypography: Array.isArray(restored.detectedTypography) ? restored.detectedTypography : (Array.isArray(options.detectedTypography) ? options.detectedTypography : []),
+    pdfAnalysisError: restored.pdfAnalysisError ?? options.pdfAnalysisError ?? "",
+    layoutAnalysis: restored.layoutAnalysis ?? null,
+    comparisonScore: restored.comparisonScore ?? null,
   };
   state.documents.push(doc);
   state.activeDocumentId = doc.id;
@@ -321,10 +335,14 @@ async function importPdf(file) {
     });
     const pageSuffix = String(pageNumber).padStart(2, "0");
     const sourceName = `${safeFileName(baseName)}-page-${pageSuffix}.png`;
+    const pdfMetadata = window.DesignSpecWorkbench?.analysePdfPage
+      ? await window.DesignSpecWorkbench.analysePdfPage(page, renderScale)
+      : {};
     await addDocumentFromBlob(blob, {
       sourceName,
       displayName: `${baseName} · Page ${pageNumber}`,
       sourceFile: `references/${sourceName}`,
+      ...pdfMetadata,
     });
   }
 
@@ -360,6 +378,7 @@ function renderAll() {
   els.documentCount.textContent = String(state.documents.length);
   els.exportBtn.disabled = state.documents.length === 0;
   els.autoPaletteBtn.disabled = !activeDocument();
+  document.dispatchEvent(new CustomEvent("designspec:statechange"));
 }
 
 function syncProjectControls() {
@@ -1101,7 +1120,7 @@ function deleteSelectedRegion() {
 function serialiseProject() {
   return {
     format: "design-spec-extractor",
-    version: 2,
+    version: 3,
     generatedAt: new Date().toISOString(),
     project: structuredClone(state.project),
     documents: state.documents.map((doc) => ({
@@ -1120,6 +1139,12 @@ function serialiseProject() {
       cssScale: documentCssScale(doc),
       cssGuidesX: doc.guidesX.map((value) => toCssPixels(value, doc)),
       cssGuidesY: doc.guidesY.map((value) => toCssPixels(value, doc)),
+      viewport: structuredClone(doc.viewport ?? null),
+      pdfTextRuns: structuredClone(doc.pdfTextRuns ?? []),
+      detectedTypography: structuredClone(doc.detectedTypography ?? []),
+      pdfAnalysisError: doc.pdfAnalysisError ?? "",
+      layoutAnalysis: structuredClone(doc.layoutAnalysis ?? null),
+      comparisonScore: doc.comparisonScore ?? null,
       annotations: doc.annotations.map((region) => ({
         ...structuredClone(region),
         css: {
@@ -1384,14 +1409,26 @@ async function exportPackage() {
   try {
     const JSZip = await loadJsZip();
     const spec = serialiseProject();
+    const audit = window.DesignSpecWorkbench?.runAudit?.({ silent: true });
+    if (audit?.blocking?.length) {
+      window.DesignSpecWorkbench?.openAudit?.();
+      showToast(`Resolve ${audit.blocking.length} blocking preflight issue${audit.blocking.length === 1 ? "" : "s"} before export.`, 5200);
+      return;
+    }
     const zip = new JSZip();
     zip.file("design-spec.json", JSON.stringify(spec, null, 2));
-    zip.file("DESIGN_SPEC.md", generateMarkdown(spec));
-    zip.file("AI_BUILD_PROMPT.md", generatePrompt());
+    const baseMarkdown = generateMarkdown(spec);
+    const basePrompt = generatePrompt();
+    zip.file("DESIGN_SPEC.md", window.DesignSpecWorkbench?.augmentMarkdown?.(baseMarkdown, spec) ?? baseMarkdown);
+    zip.file("AI_BUILD_PROMPT.md", window.DesignSpecWorkbench?.augmentPrompt?.(basePrompt, spec) ?? basePrompt);
     zip.file("tokens.css", generateCssTokens());
     zip.file("README.md", generateHandoffReadme());
     zip.file("starter/index.html", generateStarterHtml());
     zip.file("starter/styles.css", generateStarterCss());
+    const additionalFiles = window.DesignSpecWorkbench?.generateAdditionalFiles?.(spec) ?? {};
+    for (const [path, content] of Object.entries(additionalFiles)) {
+      zip.file(path, content);
+    }
     for (const doc of state.documents) {
       zip.file(doc.sourceFile, doc.imageBlob);
     }
@@ -1438,6 +1475,7 @@ async function openPackage(file) {
         restored,
       });
     }
+    await window.DesignSpecWorkbench?.restoreAdditionalFiles?.(zip, spec);
     renderAll();
     requestAnimationFrame(fitToViewport);
     showToast("Project package opened.");
@@ -1487,11 +1525,16 @@ function clearProject(requireConfirmation = true) {
 }
 
 function updatePromptPreview() {
-  els.promptPreview.textContent = state.documents.length ? generatePrompt() : "Add a reference to generate the handoff prompt.";
+  const basePrompt = state.documents.length ? generatePrompt() : "Add a reference to generate the handoff prompt.";
+  els.promptPreview.textContent = state.documents.length
+    ? (window.DesignSpecWorkbench?.augmentPrompt?.(basePrompt, serialiseProject()) ?? basePrompt)
+    : basePrompt;
+  document.dispatchEvent(new CustomEvent("designspec:statechange"));
 }
 
 async function copyPrompt() {
-  const text = generatePrompt();
+  const basePrompt = generatePrompt();
+  const text = window.DesignSpecWorkbench?.augmentPrompt?.(basePrompt, serialiseProject()) ?? basePrompt;
   try {
     await navigator.clipboard.writeText(text);
     showToast("Prompt copied.");
@@ -1744,6 +1787,34 @@ function bindEvents() {
     }
   });
 }
+
+window.DesignSpecApp = {
+  state,
+  els,
+  uid,
+  clamp,
+  round,
+  activeDocument,
+  selectedRegion,
+  documentCssScale,
+  documentCssHeight,
+  toCssPixels,
+  renderAll,
+  renderDocumentList,
+  renderActiveDocument,
+  renderSelectionEditor,
+  renderPalette,
+  renderSpacing,
+  renderTypeStyles,
+  updatePromptPreview,
+  showToast,
+  fitToViewport,
+  serialiseProject,
+  safeCssName,
+  safeFileName,
+  setTool,
+};
+document.dispatchEvent(new CustomEvent("designspec:ready", { detail: window.DesignSpecApp }));
 
 function initialise() {
   bindEvents();
