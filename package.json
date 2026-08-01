@@ -1,9 +1,9 @@
 {
   "name": "design-spec-extractor",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/smoke-test.mjs"
+    "test": "node tests/smoke-test.mjs && node tests/v3-test.mjs"
   }
 }
