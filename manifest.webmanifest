@@ -1,0 +1,15 @@
+{
+  "name": "Design Spec Extractor",
+  "short_name": "Design Spec",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f1f2ef",
+  "theme_color": "#373A36",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
